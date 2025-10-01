@@ -263,6 +263,16 @@ sudo PATH=$PATH:/opt/cni/bin:/usr/sbin kubebuilder/bin/kube-controller-manager \
     --v=2 &
 ```
 
+### Start cloud-controller-manager:
+```bash
+## TODO
+# sudo kubebuilder/bin/cloud-controller-manager \
+
+# tmp fix:
+MY_NODE=$(sudo kubebuilder/bin/kubectl get nodes -oname)
+sudo kubebuilder/bin/kubectl taint nodes $MY_NODE node.cloudprovider.kubernetes.io/uninitialized=true:NoSchedule-
+```
+
 ## 11. Verify Setup
 ```bash
 # Check node status
