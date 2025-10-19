@@ -41,6 +41,7 @@ download_components() {
     sudo mkdir -p /var/log/kubernetes
     sudo mkdir -p /etc/containerd/
     sudo mkdir -p /run/containerd
+    sudo mkdir -p /tmp/mastering-k8s
 
     # Download kubebuilder tools if not present
     if [ ! -f "kubebuilder/bin/etcd" ]; then
@@ -91,23 +92,23 @@ download_components() {
 
 setup_configs() {
     # Generate certificates and tokens if they don't exist
-    if [ ! -f "/tmp/sa.key" ]; then
-        openssl genrsa -out /tmp/sa.key 2048
-        openssl rsa -in /tmp/sa.key -pubout -out /tmp/sa.pub
+    if [ ! -f "/tmp/mastering-k8s/sa.key" ]; then
+        openssl genrsa -out /tmp/mastering-k8s/sa.key 2048
+        openssl rsa -in /tmp/mastering-k8s/sa.key -pubout -out /tmp/mastering-k8s/sa.pub
     fi
 
-    if [ ! -f "/tmp/token.csv" ]; then
+    if [ ! -f "/tmp/mastering-k8s/token.csv" ]; then
         TOKEN="1234567890"
-        echo "${TOKEN},admin,admin,system:masters" > /tmp/token.csv
+        echo "${TOKEN},admin,admin,system:masters" > /tmp/mastering-k8s/token.csv
     fi
 
     # Always regenerate and copy CA certificate to ensure it exists
     echo "Generating CA certificate..."
-    openssl genrsa -out /tmp/ca.key 2048
-    openssl req -x509 -new -nodes -key /tmp/ca.key -subj "/CN=kubelet-ca" -days 365 -out /tmp/ca.crt
+    openssl genrsa -out /tmp/mastering-k8s/ca.key 2048
+    openssl req -x509 -new -nodes -key /tmp/mastering-k8s/ca.key -subj "/CN=kubelet-ca" -days 365 -out /tmp/mastering-k8s/ca.crt
     sudo mkdir -p /var/lib/kubelet/pki
-    sudo cp /tmp/ca.crt /var/lib/kubelet/ca.crt
-    sudo cp /tmp/ca.crt /var/lib/kubelet/pki/ca.crt
+    sudo cp /tmp/mastering-k8s/ca.crt /var/lib/kubelet/ca.crt
+    sudo cp /tmp/mastering-k8s/ca.crt /var/lib/kubelet/pki/ca.crt
 
     # Set up kubeconfig if not already configured
     if ! sudo kubebuilder/bin/kubectl config current-context | grep -q "test-context"; then
@@ -256,7 +257,7 @@ start() {
             --secure-port=6443 \
             --advertise-address=$HOST_IP \
             --authorization-mode=AlwaysAllow \
-            --token-auth-file=/tmp/token.csv \
+            --token-auth-file=/tmp/mastering-k8s/token.csv \
             --enable-priority-and-fairness=false \
             --allow-privileged=true \
             --profiling=false \
@@ -265,8 +266,8 @@ start() {
             --v=0 \
             --cloud-provider=external \
             --service-account-issuer=https://kubernetes.default.svc.cluster.local \
-            --service-account-key-file=/tmp/sa.pub \
-            --service-account-signing-key-file=/tmp/sa.key &
+            --service-account-key-file=/tmp/mastering-k8s/sa.pub \
+            --service-account-signing-key-file=/tmp/mastering-k8s/sa.key &
     fi
 
     if ! is_running "containerd"; then
@@ -287,11 +288,11 @@ start() {
     # Set up kubelet kubeconfig
     sudo cp /root/.kube/config /var/lib/kubelet/kubeconfig
     export KUBECONFIG=~/.kube/config
-    cp /tmp/sa.pub /tmp/ca.crt
+    cp /tmp/mastering-k8s/sa.pub /tmp/mastering-k8s/ca.crt
 
     # Create service account and configmap if they don't exist
     sudo kubebuilder/bin/kubectl create sa default 2>/dev/null || true
-    sudo kubebuilder/bin/kubectl create configmap kube-root-ca.crt --from-file=ca.crt=/tmp/ca.crt -n default 2>/dev/null || true
+    sudo kubebuilder/bin/kubectl create configmap kube-root-ca.crt --from-file=ca.crt=/tmp/mastering-k8s/ca.crt -n default 2>/dev/null || true
 
 
     if ! is_running "kubelet"; then
@@ -308,7 +309,7 @@ start() {
             --node-ip=$HOST_IP \
             --cloud-provider=external \
             --cgroup-driver=cgroupfs \
-            --max-pods=4  \
+            --max-pods=40  \
             --v=1 &
     fi
 
@@ -325,7 +326,7 @@ start() {
             --service-cluster-ip-range=10.0.0.0/24 \
             --cluster-name=kubernetes \
             --root-ca-file=/var/lib/kubelet/ca.crt \
-            --service-account-private-key-file=/tmp/sa.key \
+            --service-account-private-key-file=/tmp/mastering-k8s/sa.key \
             --use-service-account-credentials=true \
             --v=2 &
     fi
@@ -359,7 +360,8 @@ cleanup() {
     sudo rm -rf ./etcd
     sudo rm -rf /var/lib/kubelet/*
     sudo rm -rf /run/containerd/*
-    sudo rm -f /tmp/sa.key /tmp/sa.pub /tmp/token.csv /tmp/ca.key /tmp/ca.crt
+    sudo rm -rf /var/lib/containerd/*
+    sudo rm -rf /tmp/mastering-k8s
     echo "Cleanup complete"
 }
 
