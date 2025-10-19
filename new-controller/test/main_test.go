@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	newv1 "github.com/mastering-k8s/new-controller/api/v1alpha1"
-	"github.com/mastering-k8s/new-controller/controllers"
+	newv1 "github.com/vkhash/mastering-k8s/new-controller/api/v1alpha1"
+	"github.com/vkhash/mastering-k8s/new-controller/controllers"
 	"github.com/stretchr/testify/require"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
