@@ -108,10 +108,10 @@ Generate deep copy methods and CRDs:
 
 ```bash
 # Generate deep copy methods
-controller-gen object paths="api/..."
+controller-gen object paths="./..."
 
 # Generate CRDs
-controller-gen crd:crdVersions=v1 paths=... output:crd:artifacts:config=config/crd/bases
+controller-gen crd:crdVersions=v1 paths="..." output:crd:artifacts:config=config/crd/bases
 ```
 
 ### Step 3: Create Main Application
@@ -265,7 +265,9 @@ You should see `status.ready: true` in the output.
 ### Running Tests
 
 ```bash
-KUBEBUILDER_ASSETS="<PATH_TO_TESTENV_BIN>" go test ./...
+cd test
+KUBEBUILDER_ASSETS="../../kubebuilder/bin" go test ./...
+cd ..
 ```
 
 ### Generating CRDs
