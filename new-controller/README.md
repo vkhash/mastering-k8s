@@ -108,7 +108,7 @@ Generate deep copy methods and CRDs:
 
 ```bash
 # Initialize Go module
-go mod init github.com/den-vasyliev/mastering-k8s/new-controller
+go mod init github.com/vkhash/mastering-k8s/new-controller
 
 # Build the controller
 go mod tidy
