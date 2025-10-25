@@ -54,9 +54,11 @@ download_components() {
         sudo curl -L "https://dl.k8s.io/v1.30.0/bin/linux/amd64/kube-controller-manager" -o kubebuilder/bin/kube-controller-manager
         sudo curl -L "https://dl.k8s.io/v1.30.0/bin/linux/amd64/kube-scheduler" -o kubebuilder/bin/kube-scheduler
         sudo curl -L "https://dl.k8s.io/v1.30.0/bin/linux/amd64/cloud-controller-manager" -o kubebuilder/bin/cloud-controller-manager
+        sudo curl -L "https://dl.k8s.io/v1.30.0/bin/linux/amd64/kube-proxy" -o kubebuilder/bin/kube-proxy
         sudo chmod 755 kubebuilder/bin/kube-controller-manager
         sudo chmod 755 kubebuilder/bin/kube-scheduler
         sudo chmod 755 kubebuilder/bin/cloud-controller-manager
+        sudo chmod 755 kubebuilder/bin/kube-proxy
     fi
 }
 

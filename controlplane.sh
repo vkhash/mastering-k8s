@@ -7,6 +7,7 @@ echo "Setting up Kubernetes control plane..."
 
 # Function to check if a process is running
 is_running() {
+    sleep 5
     pgrep -f "$1" >/dev/null
 }
 
@@ -43,6 +44,7 @@ POD_CIDR=192.168.0.0/24
 SAN=10.10.0.1
 SVC_CIDR=10.10.0.0/24
 DNS_IP=10.10.0.53
+DNS_SERVER_IP=192.168.122.1 # changeme
 
 # Configure containerd
 sudo tee /etc/containerd/config.toml <<EOF
@@ -72,6 +74,11 @@ version = 3
   SystemdCgroup = false
 EOF
 
+sudo tee /var/lib/kubelet/resolv.conf <<EOF
+nameserver $DNS_SERVER_IP
+search .
+EOF
+
 # Configure kubelet
 sudo tee /var/lib/kubelet/config.yaml <<EOF
 apiVersion: kubelet.config.k8s.io/v1beta1
@@ -86,7 +93,7 @@ authentication:
 authorization:
   mode: AlwaysAllow
 clusterDomain: "cluster.local"
-resolvConf: "/etc/resolv.conf"
+resolvConf: ./resolv.conf # "/etc/resolv.conf"
 clusterDNS:
   - ${DNS_IP}
 runtimeRequestTimeout: "15m"
@@ -232,10 +239,11 @@ clientConnection:
 mode: "iptables"
 clusterCIDR: "${POD_CIDR}"
 EOF
-     if ! is_running "kube-proxy"; then
-    echo "Starting kube-proxy..."
-    sudo kubebuilder/bin/kube-proxy --config=/tmp/kube-proxy.conf.yml --proxy-mode=iptables&
-    fi
+    # using cilium with kube-proxy replacement
+    #  if ! is_running "kube-proxy"; then
+    # echo "Starting kube-proxy..."
+    # sudo kubebuilder/bin/kube-proxy --config=/tmp/kube-proxy.conf.yml --proxy-mode=iptables&
+    # fi
     
     # Create required directories with proper permissions
     sudo mkdir -p /var/lib/kubelet/pods
