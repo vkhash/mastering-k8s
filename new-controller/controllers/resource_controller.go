@@ -3,7 +3,7 @@ package controllers
 
 import (
 	"context"
-	newv1 "github.com/mastering-k8s/new-controller/api/v1alpha1"
+	newv1 "github.com/vkhash/mastering-k8s/new-controller/api/v1alpha1"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"

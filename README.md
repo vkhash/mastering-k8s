@@ -1,6 +1,6 @@
 # Building Kubernetes Control Plane
 
-This guide explains each command and step needed to manually build a Kubernetes control plane, based on the automation in `setup-amd64.sh`.
+This guide explains each command and step needed to manually build a Kubernetes control plane, based on the automation in `setup.sh`.
 
 ## 1. Create Required Directories
 ```bash

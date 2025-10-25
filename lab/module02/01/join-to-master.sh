@@ -3,7 +3,9 @@
 # Exit on error
 set -e
 
-echo "Setting up Kubernetes control plane for AMD64..."
+MASTER_IP="192.168.122.57"
+
+echo "Joining existing cluster..."
 
 # Function to check if a process is running
 is_running() {
@@ -12,11 +14,6 @@ is_running() {
 
 # Function to check if all components are running
 check_running() {
-    is_running "etcd" && \
-    is_running "kube-apiserver" && \
-    is_running "kube-controller-manager" && \
-    is_running "cloud-controller-manager" && \
-    is_running "kube-scheduler" && \
     is_running "kubelet" && \
     is_running "containerd"
 }
@@ -41,7 +38,6 @@ download_components() {
     sudo mkdir -p /var/log/kubernetes
     sudo mkdir -p /etc/containerd/
     sudo mkdir -p /run/containerd
-    sudo mkdir -p /tmp/mastering-k8s
 
     # Download kubebuilder tools if not present
     if [ ! -f "kubebuilder/bin/etcd" ]; then
@@ -78,42 +74,13 @@ download_components() {
         # Set permissions for all CNI components
         sudo chmod -R 755 /opt/cni
     fi
-
-    if [ ! -f "kubebuilder/bin/kube-controller-manager" ]; then
-        echo "Downloading additional components..."
-        sudo curl -L "https://dl.k8s.io/v1.30.0/bin/linux/amd64/kube-controller-manager" -o kubebuilder/bin/kube-controller-manager
-        sudo curl -L "https://dl.k8s.io/v1.30.0/bin/linux/amd64/kube-scheduler" -o kubebuilder/bin/kube-scheduler
-        sudo curl -L "https://dl.k8s.io/v1.30.0/bin/linux/amd64/cloud-controller-manager" -o kubebuilder/bin/cloud-controller-manager
-        sudo chmod 755 kubebuilder/bin/kube-controller-manager
-        sudo chmod 755 kubebuilder/bin/kube-scheduler
-        sudo chmod 755 kubebuilder/bin/cloud-controller-manager
-    fi
 }
 
 setup_configs() {
-    # Generate certificates and tokens if they don't exist
-    if [ ! -f "/tmp/mastering-k8s/sa.key" ]; then
-        openssl genrsa -out /tmp/mastering-k8s/sa.key 2048
-        openssl rsa -in /tmp/mastering-k8s/sa.key -pubout -out /tmp/mastering-k8s/sa.pub
-    fi
-
-    if [ ! -f "/tmp/mastering-k8s/token.csv" ]; then
-        TOKEN="1234567890"
-        echo "${TOKEN},admin,admin,system:masters" > /tmp/mastering-k8s/token.csv
-    fi
-
-    # Always regenerate and copy CA certificate to ensure it exists
-    echo "Generating CA certificate..."
-    openssl genrsa -out /tmp/mastering-k8s/ca.key 2048
-    openssl req -x509 -new -nodes -key /tmp/mastering-k8s/ca.key -subj "/CN=kubelet-ca" -days 365 -out /tmp/mastering-k8s/ca.crt
-    sudo mkdir -p /var/lib/kubelet/pki
-    sudo cp /tmp/mastering-k8s/ca.crt /var/lib/kubelet/ca.crt
-    sudo cp /tmp/mastering-k8s/ca.crt /var/lib/kubelet/pki/ca.crt
-
     # Set up kubeconfig if not already configured
     if ! sudo kubebuilder/bin/kubectl config current-context | grep -q "test-context"; then
         sudo kubebuilder/bin/kubectl config set-credentials test-user --token=1234567890
-        sudo kubebuilder/bin/kubectl config set-cluster test-env --server=https://127.0.0.1:6443 --insecure-skip-tls-verify
+        sudo kubebuilder/bin/kubectl config set-cluster test-env --server=https://$MASTER_IP:6443 --insecure-skip-tls-verify
         sudo kubebuilder/bin/kubectl config set-context test-context --cluster=test-env --user=test-user --namespace=default 
         sudo kubebuilder/bin/kubectl config use-context test-context
     fi
@@ -179,7 +146,7 @@ authentication:
   webhook:
     enabled: true
   x509:
-    clientCAFile: "/var/lib/kubelet/ca.crt"
+    clientCAFile: ""
 authorization:
   mode: AlwaysAllow
 clusterDomain: "cluster.local"
@@ -203,7 +170,6 @@ EOF
     sudo chmod 750 /var/lib/kubelet/plugins_registry
 
     # Ensure proper permissions
-    sudo chmod 644 /var/lib/kubelet/ca.crt
     sudo chmod 644 /var/lib/kubelet/config.yaml
 
     # Generate self-signed kubelet serving certificate if not present
@@ -234,66 +200,15 @@ start() {
     setup_configs
 
     # Start components if not running
-    if ! is_running "etcd"; then
-        echo "Starting etcd..."
-        sudo kubebuilder/bin/etcd \
-            --advertise-client-urls http://$HOST_IP:2379 \
-            --listen-client-urls http://0.0.0.0:2379 \
-            --data-dir ./etcd \
-            --listen-peer-urls http://0.0.0.0:2380 \
-            --initial-cluster default=http://$HOST_IP:2380 \
-            --initial-advertise-peer-urls http://$HOST_IP:2380 \
-            --initial-cluster-state new \
-            --initial-cluster-token test-token &
-    fi
-
-    if ! is_running "kube-apiserver"; then
-        echo "Starting kube-apiserver..."
-        echo "use application/vnd.kubernetes.protobuf for better performance"
-        sudo kubebuilder/bin/kube-apiserver \
-            --etcd-servers=http://$HOST_IP:2379 \
-            --service-cluster-ip-range=10.0.0.0/24 \
-            --bind-address=0.0.0.0 \
-            --secure-port=6443 \
-            --advertise-address=$HOST_IP \
-            --authorization-mode=AlwaysAllow \
-            --token-auth-file=/tmp/mastering-k8s/token.csv \
-            --enable-priority-and-fairness=false \
-            --allow-privileged=true \
-            --profiling=false \
-            --storage-backend=etcd3 \
-            --storage-media-type=application/json \
-            --v=0 \
-            --cloud-provider=external \
-            --service-account-issuer=https://kubernetes.default.svc.cluster.local \
-            --service-account-key-file=/tmp/mastering-k8s/sa.pub \
-            --service-account-signing-key-file=/tmp/mastering-k8s/sa.key &
-    fi
-
     if ! is_running "containerd"; then
         echo "Starting containerd..."
         export PATH=$PATH:/opt/cni/bin:kubebuilder/bin
         sudo PATH=$PATH:/opt/cni/bin:/usr/sbin /opt/cni/bin/containerd -c /etc/containerd/config.toml &
     fi
 
-    if ! is_running "kube-scheduler"; then
-        echo "Starting kube-scheduler..."
-        sudo kubebuilder/bin/kube-scheduler \
-            --kubeconfig=/root/.kube/config \
-            --leader-elect=false \
-            --v=2 \
-            --bind-address=0.0.0.0 &
-    fi
-
     # Set up kubelet kubeconfig
     sudo cp /root/.kube/config /var/lib/kubelet/kubeconfig
     export KUBECONFIG=~/.kube/config
-    cp /tmp/mastering-k8s/sa.pub /tmp/mastering-k8s/ca.crt
-
-    # Create service account and configmap if they don't exist
-    sudo kubebuilder/bin/kubectl create sa default 2>/dev/null || true
-    sudo kubebuilder/bin/kubectl create configmap kube-root-ca.crt --from-file=ca.crt=/tmp/mastering-k8s/ca.crt -n default 2>/dev/null || true
-
 
     if ! is_running "kubelet"; then
         echo "Starting kubelet..."
@@ -302,8 +217,6 @@ start() {
             --config=/var/lib/kubelet/config.yaml \
             --root-dir=/var/lib/kubelet \
             --cert-dir=/var/lib/kubelet/pki \
-            --tls-cert-file=/var/lib/kubelet/pki/kubelet.crt \
-            --tls-private-key-file=/var/lib/kubelet/pki/kubelet.key \
             --hostname-override=$(hostname) \
             --pod-infra-container-image=registry.k8s.io/pause:3.10 \
             --node-ip=$HOST_IP \
@@ -311,24 +224,6 @@ start() {
             --cgroup-driver=cgroupfs \
             --max-pods=40  \
             --v=1 &
-    fi
-
-    # Label the node so static pods with nodeSelector can be scheduled
-    NODE_NAME=$(hostname)
-    sudo kubebuilder/bin/kubectl label node "$NODE_NAME" node-role.kubernetes.io/master="" --overwrite || true
-
-    if ! is_running "kube-controller-manager"; then
-        echo "Starting kube-controller-manager..."
-        sudo PATH=$PATH:/opt/cni/bin:/usr/sbin kubebuilder/bin/kube-controller-manager \
-            --kubeconfig=/var/lib/kubelet/kubeconfig \
-            --leader-elect=false \
-            --cloud-provider=external \
-            --service-cluster-ip-range=10.0.0.0/24 \
-            --cluster-name=kubernetes \
-            --root-ca-file=/var/lib/kubelet/ca.crt \
-            --service-account-private-key-file=/tmp/mastering-k8s/sa.key \
-            --use-service-account-credentials=true \
-            --v=2 &
     fi
 
     echo "Waiting for components to be ready..."
@@ -343,25 +238,18 @@ start() {
 
 stop() {
     echo "Stopping Kubernetes components..."
-    stop_process "cloud-controller-manager"
-    stop_process "gce_metadata_server"
-    stop_process "kube-controller-manager"
     stop_process "kubelet"
-    stop_process "kube-scheduler"
-    stop_process "kube-apiserver"
     stop_process "containerd"
-    stop_process "etcd"
     echo "All components stopped"
 }
 
 cleanup() {
     stop
     echo "Cleaning up..."
-    sudo rm -rf ./etcd
     sudo rm -rf /var/lib/kubelet/*
     sudo rm -rf /run/containerd/*
     sudo rm -rf /var/lib/containerd/*
-    sudo rm -rf /tmp/mastering-k8s
+    sudo rm /etc/kubernetes/manifests/*yaml
     echo "Cleanup complete"
 }
 
@@ -380,3 +268,78 @@ case "${1:-}" in
         exit 1
         ;;
 esac 
+
+
+# cat >/var/lib/kubelet/kubeconfig<<EOF
+# apiVersion: v1
+# clusters:
+# - cluster:
+#     insecure-skip-tls-verify: true
+#     server: https://127.0.0.1:6443
+#   name: test-env
+# contexts:
+# - context:
+#     cluster: test-env
+#     namespace: default
+#     user: test-user
+#   name: test-context
+# current-context: test-context
+# kind: Config
+# preferences: {}
+# users:
+# - name: test-user
+#   user:
+#     token: "1234567890"
+# EOF
+
+# cat >/var/lib/kubelet/config.yaml<<EOF
+# apiVersion: kubelet.config.k8s.io/v1beta1
+# kind: KubeletConfiguration
+# authentication:
+#   anonymous:
+#     enabled: true
+#   webhook:
+#     enabled: true
+#   x509:
+#     clientCAFile: "/var/lib/kubelet/ca.crt"
+# authorization:
+#   mode: AlwaysAllow
+# clusterDomain: "cluster.local"
+# clusterDNS:
+#   - "10.0.0.10"
+# resolvConf: "/etc/resolv.conf"
+# runtimeRequestTimeout: "15m"
+# failSwapOn: false
+# seccompDefault: true
+# serverTLSBootstrap: false
+# containerRuntimeEndpoint: "unix:///run/containerd/containerd.sock"
+# # staticPodPath: "/etc/kubernetes/manifests"
+# EOF
+
+
+# cat >/var/lib/kubelet/join-config.yaml<<EOF
+# ---
+# apiVersion: kubeadm.k8s.io/v1beta4
+# caCertPath: /mnt/mastering-k8s/
+# discovery:
+#   bootstrapToken:
+#     apiServerEndpoint: kube-apiserver:6443
+#     token: abcdef.0123456789abcdef
+#     unsafeSkipCAVerification: true
+#   tlsBootstrapToken: abcdef.0123456789abcdef
+# kind: JoinConfiguration
+# nodeRegistration:
+#   criSocket: unix:///var/run/containerd/containerd.sock
+#   imagePullPolicy: IfNotPresent
+#   imagePullSerial: true
+#   name: $(hostname)
+#   taints: null
+# timeouts:
+#   controlPlaneComponentHealthCheck: 4m0s
+#   discovery: 5m0s
+#   etcdAPICall: 2m0s
+#   kubeletHealthCheck: 4m0s
+#   kubernetesAPICall: 1m0s
+#   tlsBootstrap: 5m0s
+#   upgradeManifests: 5m0s
+# EOF

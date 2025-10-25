@@ -234,41 +234,41 @@ start() {
     setup_configs
 
     # Start components if not running
-    if ! is_running "etcd"; then
-        echo "Starting etcd..."
-        sudo kubebuilder/bin/etcd \
-            --advertise-client-urls http://$HOST_IP:2379 \
-            --listen-client-urls http://0.0.0.0:2379 \
-            --data-dir ./etcd \
-            --listen-peer-urls http://0.0.0.0:2380 \
-            --initial-cluster default=http://$HOST_IP:2380 \
-            --initial-advertise-peer-urls http://$HOST_IP:2380 \
-            --initial-cluster-state new \
-            --initial-cluster-token test-token &
-    fi
+    # if ! is_running "etcd"; then
+    #     echo "Starting etcd..."
+    #     sudo kubebuilder/bin/etcd \
+    #         --advertise-client-urls http://$HOST_IP:2379 \
+    #         --listen-client-urls http://0.0.0.0:2379 \
+    #         --data-dir ./etcd \
+    #         --listen-peer-urls http://0.0.0.0:2380 \
+    #         --initial-cluster default=http://$HOST_IP:2380 \
+    #         --initial-advertise-peer-urls http://$HOST_IP:2380 \
+    #         --initial-cluster-state new \
+    #         --initial-cluster-token test-token &
+    # fi
 
-    if ! is_running "kube-apiserver"; then
-        echo "Starting kube-apiserver..."
-        echo "use application/vnd.kubernetes.protobuf for better performance"
-        sudo kubebuilder/bin/kube-apiserver \
-            --etcd-servers=http://$HOST_IP:2379 \
-            --service-cluster-ip-range=10.0.0.0/24 \
-            --bind-address=0.0.0.0 \
-            --secure-port=6443 \
-            --advertise-address=$HOST_IP \
-            --authorization-mode=AlwaysAllow \
-            --token-auth-file=/tmp/mastering-k8s/token.csv \
-            --enable-priority-and-fairness=false \
-            --allow-privileged=true \
-            --profiling=false \
-            --storage-backend=etcd3 \
-            --storage-media-type=application/json \
-            --v=0 \
-            --cloud-provider=external \
-            --service-account-issuer=https://kubernetes.default.svc.cluster.local \
-            --service-account-key-file=/tmp/mastering-k8s/sa.pub \
-            --service-account-signing-key-file=/tmp/mastering-k8s/sa.key &
-    fi
+    # if ! is_running "kube-apiserver"; then
+    #     echo "Starting kube-apiserver..."
+    #     echo "use application/vnd.kubernetes.protobuf for better performance"
+    #     sudo kubebuilder/bin/kube-apiserver \
+    #         --etcd-servers=http://$HOST_IP:2379 \
+    #         --service-cluster-ip-range=10.0.0.0/24 \
+    #         --bind-address=0.0.0.0 \
+    #         --secure-port=6443 \
+    #         --advertise-address=$HOST_IP \
+    #         --authorization-mode=AlwaysAllow \
+    #         --token-auth-file=/tmp/mastering-k8s/token.csv \
+    #         --enable-priority-and-fairness=false \
+    #         --allow-privileged=true \
+    #         --profiling=false \
+    #         --storage-backend=etcd3 \
+    #         --storage-media-type=application/json \
+    #         --v=0 \
+    #         --cloud-provider=external \
+    #         --service-account-issuer=https://kubernetes.default.svc.cluster.local \
+    #         --service-account-key-file=/tmp/mastering-k8s/sa.pub \
+    #         --service-account-signing-key-file=/tmp/mastering-k8s/sa.key &
+    # fi
 
     if ! is_running "containerd"; then
         echo "Starting containerd..."
@@ -276,14 +276,14 @@ start() {
         sudo PATH=$PATH:/opt/cni/bin:/usr/sbin /opt/cni/bin/containerd -c /etc/containerd/config.toml &
     fi
 
-    if ! is_running "kube-scheduler"; then
-        echo "Starting kube-scheduler..."
-        sudo kubebuilder/bin/kube-scheduler \
-            --kubeconfig=/root/.kube/config \
-            --leader-elect=false \
-            --v=2 \
-            --bind-address=0.0.0.0 &
-    fi
+    # if ! is_running "kube-scheduler"; then
+    #     echo "Starting kube-scheduler..."
+    #     sudo kubebuilder/bin/kube-scheduler \
+    #         --kubeconfig=/root/.kube/config \
+    #         --leader-elect=false \
+    #         --v=2 \
+    #         --bind-address=0.0.0.0 &
+    # fi
 
     # Set up kubelet kubeconfig
     sudo cp /root/.kube/config /var/lib/kubelet/kubeconfig
@@ -317,19 +317,21 @@ start() {
     NODE_NAME=$(hostname)
     sudo kubebuilder/bin/kubectl label node "$NODE_NAME" node-role.kubernetes.io/master="" --overwrite || true
 
-    if ! is_running "kube-controller-manager"; then
-        echo "Starting kube-controller-manager..."
-        sudo PATH=$PATH:/opt/cni/bin:/usr/sbin kubebuilder/bin/kube-controller-manager \
-            --kubeconfig=/var/lib/kubelet/kubeconfig \
-            --leader-elect=false \
-            --cloud-provider=external \
-            --service-cluster-ip-range=10.0.0.0/24 \
-            --cluster-name=kubernetes \
-            --root-ca-file=/var/lib/kubelet/ca.crt \
-            --service-account-private-key-file=/tmp/mastering-k8s/sa.key \
-            --use-service-account-credentials=true \
-            --v=2 &
-    fi
+    # if ! is_running "kube-controller-manager"; then
+    #     echo "Starting kube-controller-manager..."
+    #     sudo PATH=$PATH:/opt/cni/bin:/usr/sbin kubebuilder/bin/kube-controller-manager \
+    #         --kubeconfig=/var/lib/kubelet/kubeconfig \
+    #         --leader-elect=false \
+    #         --cloud-provider=external \
+    #         --service-cluster-ip-range=10.0.0.0/24 \
+    #         --cluster-name=kubernetes \
+    #         --root-ca-file=/var/lib/kubelet/ca.crt \
+    #         --service-account-private-key-file=/tmp/mastering-k8s/sa.key \
+    #         --use-service-account-credentials=true \
+    #         --v=2 &
+    # fi
+
+    cp *.yaml /etc/kubernetes/manifests/
 
     echo "Waiting for components to be ready..."
     sleep 10
@@ -362,11 +364,13 @@ cleanup() {
     sudo rm -rf /run/containerd/*
     sudo rm -rf /var/lib/containerd/*
     sudo rm -rf /tmp/mastering-k8s
+    sudo rm /etc/kubernetes/manifests/*yaml
     echo "Cleanup complete"
 }
 
 case "${1:-}" in
     start)
+        . ./manifests.sh
         start
         ;;
     stop)
